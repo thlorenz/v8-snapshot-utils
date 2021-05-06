@@ -89,6 +89,7 @@ export function assembleScript(
     entryPoint?: string
     includeStrictVerifiers?: boolean
     nodeEnv: string
+    unloadableModules: string[]
   }
 ) {
   const includeStrictVerifiers = opts.includeStrictVerifiers ?? false
@@ -112,6 +113,7 @@ export function assembleScript(
     customRequireDefinitions: defs.code,
     includeStrictVerifiers,
     nodeEnv: opts.nodeEnv,
+    unloadableModules: opts.unloadableModules,
   }
   return scriptFromBlueprint(config)
 }
@@ -147,10 +149,15 @@ export async function createSnapshotScript(
   const { bundle, meta } = await createBundleAsync(opts)
 
   logDebug('Assembling snapshot script')
+  const unloadableModules = opts.includeStrictVerifiers
+    ? (opts.deferred ?? []).concat(opts.norewrite ?? [])
+    : []
+
   const script = assembleScript(bundle, opts.baseDirPath, opts.entryFilePath, {
     auxiliaryData: opts.auxiliaryData,
     includeStrictVerifiers: opts.includeStrictVerifiers,
     nodeEnv: opts.nodeEnv,
+    unloadableModules,
   })
 
   return { snapshotScript: script, meta: meta as Metadata, bundle }

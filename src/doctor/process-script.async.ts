@@ -53,6 +53,7 @@ export class AsyncScriptProcessor {
     entryPoint: string
   ): Promise<BundleAndProcessScriptResult> {
     assert(!this._isDisposed, 'should not createAndProcessScript when disposed')
+
     return this._workers.call.createAndProcessScript(opts, entryPoint)
   }
 

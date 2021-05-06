@@ -49,6 +49,7 @@ export function processScript({
   entryFilePath,
   entryPoint,
   nodeEnv,
+  unloadableModules,
 }: ProcessScriptOpts): ProcessScriptResult {
   const bundleContent = getBundle(bundlePath, bundleHash)
   let snapshotScript
@@ -57,6 +58,7 @@ export function processScript({
       entryPoint,
       includeStrictVerifiers: true,
       nodeEnv,
+      unloadableModules,
     })
   } catch (err) {
     return { outcome: 'failed:assembleScript', error: err }

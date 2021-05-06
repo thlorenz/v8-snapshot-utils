@@ -1,4 +1,5 @@
 import fs from 'fs'
+import { createVerifyModuleCanBeLoaded } from './verify-loadable-modules'
 
 function read(part: string, indent = '  ') {
   const p = require.resolve(`./blueprint/${part}`)
@@ -19,6 +20,7 @@ export type BlueprintConfig = {
   customRequireDefinitions: Buffer
   includeStrictVerifiers: boolean
   nodeEnv: string
+  unloadableModules: string[]
 }
 export function scriptFromBlueprint(config: BlueprintConfig) {
   const {
@@ -30,6 +32,10 @@ export function scriptFromBlueprint(config: BlueprintConfig) {
     includeStrictVerifiers,
     nodeEnv,
   } = config
+
+  const verifyModuleCanBeLoaded = config.includeStrictVerifiers
+    ? createVerifyModuleCanBeLoaded(config.unloadableModules)
+    : 'function verifyModuleCanBeLoaded(moduleName) {}'
 
   const wrapperOpen = Buffer.from(
     `
@@ -94,6 +100,7 @@ function generateSnapshot() {
   )
   const wrapperClose = Buffer.from(
     `
+  ${verifyModuleCanBeLoaded}
   ${customRequire}
   ${includeStrictVerifiers ? 'require.isStrict = true' : ''}
 

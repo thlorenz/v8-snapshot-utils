@@ -26,6 +26,7 @@ export type ProcessScriptOpts = {
   entryPoint: string
 
   nodeEnv: string
+  unloadableModules: string[]
 }
 
 export type ProcessScriptResult = {

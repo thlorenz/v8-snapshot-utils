@@ -480,6 +480,10 @@ export class SnapshotDoctor {
         const promises = nextStage.map(
           async (key): Promise<void> => {
             logDebug('Testing entry in isolation "%s"', key)
+
+            const unloadableModules = Array.from(healState.deferred).concat(
+              Array.from(healState.norewrite)
+            )
             const result = await this._scriptProcessor.processScript({
               bundlePath,
               bundleHash,
@@ -487,6 +491,7 @@ export class SnapshotDoctor {
               entryFilePath: this.entryFilePath,
               entryPoint: `./${key}`,
               nodeEnv: this.nodeEnv,
+              unloadableModules,
             })
 
             assert(result != null, 'expected result from script processor')
