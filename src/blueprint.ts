@@ -1,6 +1,9 @@
 import fs from 'fs'
 import { createVerifyModuleCanBeLoaded } from './verify-loadable-modules'
 
+import debug from 'debug'
+const logInfo = debug('snapgen:info')
+
 function read(part: string, indent = '  ') {
   const p = require.resolve(`./blueprint/${part}`)
   const s = fs.readFileSync(p, 'utf8')
@@ -36,6 +39,11 @@ export function scriptFromBlueprint(config: BlueprintConfig) {
   const verifyModuleCanBeLoaded = config.includeStrictVerifiers
     ? createVerifyModuleCanBeLoaded(config.unloadableModules)
     : 'function verifyModuleCanBeLoaded(moduleName) {}'
+
+  logInfo({
+    unloadables: config.unloadableModules.length,
+    verify: config.includeStrictVerifiers,
+  })
 
   const wrapperOpen = Buffer.from(
     `

@@ -185,6 +185,7 @@ export class SnapshotDoctor {
 
     await this._processCurrentScript(bundle, warnings, healState, circulars)
     while (healState.needDefer.size > 0 || healState.needNorewrite.size > 0) {
+      debugger
       for (const x of healState.needDefer) {
         healState.deferred.add(x)
         healState.healthy.delete(x)
@@ -434,7 +435,7 @@ export class SnapshotDoctor {
     circulars: Map<string, Set<string>>
   ) {
     const processedWarnings = this._warningsProcessor.process(warnings, {
-      deferred: healState.deferred,
+      deferred: new Set(), // healState.deferred,
       norewrite: healState.norewrite,
     })
     for (const warning of processedWarnings) {
@@ -454,8 +455,8 @@ export class SnapshotDoctor {
       }
     }
 
-    // If norwrite is required we actually need to rebuild the bundle so we exit early
-    if (healState.needNorewrite.size > 0) {
+    // If new static issues were encountered we need to rebuild the bundle so we exit early
+    if (healState.needNorewrite.size > 0 || healState.needDefer.size > 0) {
       return
     }
 
@@ -471,9 +472,13 @@ export class SnapshotDoctor {
       ) {
         if (!healState.processedLeaves) {
           healState.processedLeaves = true
-          // In case all leaves were determined to be healthy before we can move on to therefore
+          // In case all leaves were determined to be healthy before we can move on to the
           // next step
-          if (nextStage.length < 0) {
+          if (
+            nextStage.length === 0 &&
+            healState.needDefer.size === 0 &&
+            healState.needNorewrite.size === 0
+          ) {
             nextStage = this._findNextStage(healState, circulars)
           }
         }
@@ -594,6 +599,7 @@ export class SnapshotDoctor {
       if (
         healState.healthy.has(key) ||
         healState.deferred.has(key) ||
+        healState.needDefer.has(key) ||
         healState.needNorewrite.has(key)
       ) {
         continue

@@ -9,7 +9,7 @@ export function createVerifyModuleCanBeLoaded(
   function verifyModuleCanBeLoaded(moduleName) {
      if (unloadables.has(moduleName)) {
         throw new Error(
-          '[SNAPSHOT_CACHE_FAILURE] Cannot load module "' +
+          '[SNAPSHOT_CACHE_FAILURE] Cannot load deferred or norewrite module "' +
           moduleName + '"' +
           ' during snapshot creation'
         )
