@@ -1,5 +1,4 @@
 import { strict as assert } from 'assert'
-import { execFileSync } from 'child_process'
 import debug from 'debug'
 import fs from 'fs'
 import { dirname, join } from 'path'
@@ -9,22 +8,20 @@ import { SnapshotVerifier } from './snapshot-verifier'
 import { determineDeferred } from './doctor/determine-deferred'
 import {
   checkDirSync,
-  checkFileSync,
   electronSnapshotFilenames,
   electronSnapshotPath,
   ensureDirSync,
   fileExistsSync,
-  findMksnapshot,
   getBundlerPath,
 } from './utils'
 import { createExportScript } from './create-snapshot-bundle'
 import { Flag, GeneratorFlags } from './snapshot-generator-flags'
+import { syncAndRun } from '@thlorenz/electron-mksnapshot'
 
 const logInfo = debug('snapgen:info')
 const logDebug = debug('snapgen:debug')
 const logError = debug('snapgen:error')
 
-const MK_SNAPSHOT_BIN_FILENAME = 'v8_context_snapshot.bin'
 const NOT_DEFINED_FOR_SCRIPT_MODE = '<not defined for script only mode>'
 
 type GenerationOpts = {
@@ -39,7 +36,6 @@ type GenerationOpts = {
   previousDeferred?: string[]
   previousNoRewrite?: string[]
   forceNoRewrite?: string[]
-  mksnapshotBin?: string
   auxiliaryData?: Record<string, any>
   maxWorkers?: number
   flags: Flag
@@ -69,8 +65,7 @@ export class SnapshotGenerator {
   private readonly cacheDir: string
   private readonly snapshotScriptPath: string
   private readonly snapshotExportScriptPath: string
-  private readonly mksnapshotBin: string
-  private readonly mksnapshotBinFilename: string
+  private mksnapshotBinPath?: string
   private readonly snapshotBinDir: string
   private readonly snapshotBackupFilename: string
   private readonly auxiliaryData?: Record<string, any>
@@ -138,23 +133,14 @@ export class SnapshotGenerator {
     this.bundlerPath = getBundlerPath()
 
     if (this._flags.has(Flag.MakeSnapshot)) {
+      // TODO(thlorenz): those should be resolved after mksnapshot using the meta
       const { snapshotBin, snapshotBackup } = electronSnapshotFilenames(
         projectBaseDir
       )
+      // TODO(thlorenz): not really needed anymore
       this.snapshotBinFilename = snapshotBin
       this.snapshotBackupFilename = snapshotBackup
-      this.mksnapshotBinFilename = MK_SNAPSHOT_BIN_FILENAME
-
-      if (opts.mksnapshotBin == null) {
-        logDebug('No mksnapshot binary provided, attempting to find it')
-        this.mksnapshotBin = findMksnapshot(projectBaseDir)
-      } else {
-        checkFileSync(opts.mksnapshotBin)
-        this.mksnapshotBin = opts.mksnapshotBin
-      }
     } else {
-      this.mksnapshotBin = NOT_DEFINED_FOR_SCRIPT_MODE
-      this.mksnapshotBinFilename = NOT_DEFINED_FOR_SCRIPT_MODE
       this.snapshotBinFilename = NOT_DEFINED_FOR_SCRIPT_MODE
       this.snapshotBackupFilename = NOT_DEFINED_FOR_SCRIPT_MODE
     }
@@ -165,7 +151,6 @@ export class SnapshotGenerator {
       cacheDir,
       snapshotBinDir,
       snapshotScriptPath: this.snapshotScriptPath,
-      mksnapshotBin: this.mksnapshotBin,
       nodeModulesOnly: this.nodeModulesOnly,
       includeStrictVerifiers: this.includeStrictVerifiers,
       previousDeferred: this.previousDeferred.size,
@@ -320,7 +305,12 @@ export class SnapshotGenerator {
     )
   }
 
-  makeSnapshot() {
+  async makeSnapshot() {
+    function runInstructions() {
+      const bin = require.resolve('@thlorenz/mksnapshot/dist/mksnapshot-bin')
+      const cmd = `node ${bin} ${args.join(' ')}`
+      logError(`Run:\n   ${cmd}\n to investigate.`)
+    }
     assert(
       this.snapshotScript != null,
       'Run `createScript` first to create snapshotScript'
@@ -330,20 +320,17 @@ export class SnapshotGenerator {
       'Cannot makeSnapshot when MakeSnapshot flag is not set'
     )
     const args = [this.snapshotScriptPath, '--output_dir', this.snapshotBinDir]
-    const cmd = `node ${this.mksnapshotBin} ${args.join(' ')}`
-    logDebug(cmd)
     try {
-      execFileSync(this.mksnapshotBin, args)
-      const createdSnapshotBin = join(
-        this.snapshotBinDir,
-        this.mksnapshotBinFilename
-      )
-      if (!fileExistsSync(createdSnapshotBin)) {
+      // TODO(thlorenz): pass version from outside
+      const { snapshotBlobFile } = await syncAndRun('12.0.0', args)
+      this.mksnapshotBinPath = join(this.snapshotBinDir, snapshotBlobFile)
+
+      if (!fileExistsSync(this.mksnapshotBinPath)) {
         logError(
-          `Cannot find ${createdSnapshotBin} which should've been created.\n` +
-            `This could be due to the mksnapshot command silently failing. Run:\n   ${cmd}\n` +
-            `to verify this.`
+          `Cannot find ${this.mksnapshotBinPath} which should've been created.\n` +
+            `This could be due to the mksnapshot command silently failing.`
         )
+        runInstructions()
         return false
       }
       return true
@@ -354,6 +341,7 @@ export class SnapshotGenerator {
       if (err.stdout != null) {
         logDebug(err.stdout.toString())
       }
+      runInstructions()
       throw new Error('Failed `mksnapshot` command')
     }
   }
@@ -367,13 +355,10 @@ export class SnapshotGenerator {
       this._flags.has(Flag.MakeSnapshot),
       'Cannot install when MakeSnapshot flag is not set'
     )
-    const createdSnapshotBin = join(
-      this.snapshotBinDir,
-      this.mksnapshotBinFilename
-    )
     assert(
-      fileExistsSync(createdSnapshotBin),
-      'Run `makeSnapshot` first to create ' + createdSnapshotBin
+      this.mksnapshotBinPath != null && fileExistsSync(this.mksnapshotBinPath),
+      'Run `makeSnapshot` first to create snapshot bin file ' +
+        this.mksnapshotBinPath
     )
 
     const electronSnapshotBin = electronSnapshotPath(this.projectBaseDir)
@@ -396,11 +381,11 @@ export class SnapshotGenerator {
       fs.copyFileSync(electronSnapshotBin, originalSnapshotBin)
     }
     logInfo(`Moving snapshot bin to '${electronSnapshotBin}'`)
-    fs.renameSync(createdSnapshotBin, electronSnapshotBin)
+    fs.renameSync(this.mksnapshotBinPath, electronSnapshotBin)
   }
 
-  makeAndInstallSnapshot() {
-    if (this.makeSnapshot()) {
+  async makeAndInstallSnapshot() {
+    if (await this.makeSnapshot()) {
       this.installSnapshot()
     } else {
       throw new Error('make snapshot failed')
