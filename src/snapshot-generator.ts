@@ -7,22 +7,21 @@ import { createSnapshotScript } from './create-snapshot-script'
 import { SnapshotVerifier } from './snapshot-verifier'
 import { determineDeferred } from './doctor/determine-deferred'
 import {
+  backupName,
   checkDirSync,
-  electronSnapshotFilenames,
   electronSnapshotPath,
   ensureDirSync,
   fileExistsSync,
   getBundlerPath,
+  resolveElectronVersion,
 } from './utils'
 import { createExportScript } from './create-snapshot-bundle'
 import { Flag, GeneratorFlags } from './snapshot-generator-flags'
-import { syncAndRun } from '@thlorenz/electron-mksnapshot'
+import { syncAndRun, getMetadata } from '@thlorenz/electron-mksnapshot'
 
 const logInfo = debug('snapgen:info')
 const logDebug = debug('snapgen:debug')
 const logError = debug('snapgen:error')
-
-const NOT_DEFINED_FOR_SCRIPT_MODE = '<not defined for script only mode>'
 
 type GenerationOpts = {
   verify: boolean
@@ -37,6 +36,7 @@ type GenerationOpts = {
   previousNoRewrite?: string[]
   forceNoRewrite?: string[]
   auxiliaryData?: Record<string, any>
+  electronVersion?: string
   maxWorkers?: number
   flags: Flag
   nodeEnv: string
@@ -65,10 +65,9 @@ export class SnapshotGenerator {
   private readonly cacheDir: string
   private readonly snapshotScriptPath: string
   private readonly snapshotExportScriptPath: string
-  private mksnapshotBinPath?: string
   private readonly snapshotBinDir: string
-  private readonly snapshotBackupFilename: string
   private readonly auxiliaryData?: Record<string, any>
+  private readonly electronVersion: string
   private readonly nodeModulesOnly: boolean
   private readonly includeStrictVerifiers: boolean
   private readonly maxWorkers?: number
@@ -80,7 +79,10 @@ export class SnapshotGenerator {
   private readonly bundlerPath: string
   private readonly _snapshotVerifier: SnapshotVerifier
   private readonly _flags: GeneratorFlags
-  readonly snapshotBinFilename: string
+
+  private mksnapshotBinPath?: string
+  private v8ContextFile?: string
+
   snapshotScript?: Buffer
   snapshotExportScript?: string
 
@@ -104,6 +106,7 @@ export class SnapshotGenerator {
       forceNoRewrite,
       flags: mode,
       nodeEnv,
+      electronVersion,
     }: GenerationOpts = Object.assign(
       getDefaultGenerationOpts(projectBaseDir),
       opts
@@ -121,6 +124,8 @@ export class SnapshotGenerator {
     this.snapshotScriptPath = join(cacheDir, 'snapshot.js')
     this.snapshotExportScriptPath = join(cacheDir, 'snapshot-bundle.js')
     this.auxiliaryData = opts.auxiliaryData
+    this.electronVersion =
+      electronVersion ?? resolveElectronVersion(projectBaseDir)
     this.nodeModulesOnly = nodeModulesOnly
     this.includeStrictVerifiers = includeStrictVerifiers
     this.previousDeferred = new Set(previousDeferred)
@@ -131,19 +136,6 @@ export class SnapshotGenerator {
     this.nodeEnv = nodeEnv
     this._flags = new GeneratorFlags(mode)
     this.bundlerPath = getBundlerPath()
-
-    if (this._flags.has(Flag.MakeSnapshot)) {
-      // TODO(thlorenz): those should be resolved after mksnapshot using the meta
-      const { snapshotBin, snapshotBackup } = electronSnapshotFilenames(
-        projectBaseDir
-      )
-      // TODO(thlorenz): not really needed anymore
-      this.snapshotBinFilename = snapshotBin
-      this.snapshotBackupFilename = snapshotBackup
-    } else {
-      this.snapshotBinFilename = NOT_DEFINED_FOR_SCRIPT_MODE
-      this.snapshotBackupFilename = NOT_DEFINED_FOR_SCRIPT_MODE
-    }
 
     const auxiliaryDataKeys = Object.keys(this.auxiliaryData || {})
     logInfo({
@@ -321,8 +313,11 @@ export class SnapshotGenerator {
     )
     const args = [this.snapshotScriptPath, '--output_dir', this.snapshotBinDir]
     try {
-      // TODO(thlorenz): pass version from outside
-      const { snapshotBlobFile } = await syncAndRun('12.0.0', args)
+      const { snapshotBlobFile, v8ContextFile } = await syncAndRun(
+        this.electronVersion,
+        args
+      )
+      this.v8ContextFile = v8ContextFile
       this.mksnapshotBinPath = join(this.snapshotBinDir, snapshotBlobFile)
 
       if (!fileExistsSync(this.mksnapshotBinPath)) {
@@ -360,15 +355,20 @@ export class SnapshotGenerator {
       'Run `makeSnapshot` first to create snapshot bin file ' +
         this.mksnapshotBinPath
     )
+    assert(
+      this.v8ContextFile != null,
+      'mksnapshot ran but v8ContextFile was not set'
+    )
 
-    const electronSnapshotBin = electronSnapshotPath(this.projectBaseDir)
+    const electronSnapshotBin = electronSnapshotPath(
+      this.projectBaseDir,
+      this.v8ContextFile
+    )
     const electronSnapshotDir = dirname(electronSnapshotBin)
     checkDirSync(electronSnapshotDir)
 
-    const originalSnapshotBin = join(
-      electronSnapshotDir,
-      this.snapshotBackupFilename
-    )
+    const v8ContextBackupName = backupName(this.v8ContextFile)
+    const originalSnapshotBin = join(electronSnapshotDir, v8ContextBackupName)
 
     if (!fileExistsSync(originalSnapshotBin)) {
       logInfo(
@@ -398,12 +398,18 @@ export class SnapshotGenerator {
   }
 }
 
-export function uninstallSnapshot(projectBaseDir: string) {
-  const electronSnapshotBin = electronSnapshotPath(projectBaseDir)
+export function uninstallSnapshot(projectBaseDir: string, version?: string) {
+  version = version ?? resolveElectronVersion(projectBaseDir)
+  const { v8ContextFile } = getMetadata(version)
+
+  const electronSnapshotBin = electronSnapshotPath(
+    projectBaseDir,
+    v8ContextFile
+  )
   const electronSnapshotDir = dirname(electronSnapshotBin)
   checkDirSync(electronSnapshotDir)
 
-  const { snapshotBackup } = electronSnapshotFilenames(projectBaseDir)
+  const snapshotBackup = backupName(v8ContextFile)
   const originalSnapshotBin = join(electronSnapshotDir, snapshotBackup)
 
   assert(

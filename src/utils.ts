@@ -2,7 +2,8 @@ import { blueBright, gray, green, yellow } from 'ansi-colors'
 import fs from 'fs'
 import os from 'os'
 import crypto from 'crypto'
-import path, { join, resolve } from 'path'
+import path from 'path'
+import resolveFrom from 'resolve-from'
 
 import debug from 'debug'
 const logDebug = debug('snapgen:debug')
@@ -118,40 +119,19 @@ export function fileExistsSync(p: string) {
   }
 }
 
-export function findMksnapshot(root: string) {
-  const p = resolve(
-    root,
-    'node_modules',
-    '.bin',
-    'mksnapshot' + (process.platform === 'win32' ? '.cmd' : '')
-  )
-  checkFileSync(p)
-  return p
+export function resolveElectronVersion(root: string): string {
+  const electron = resolveFrom(root, 'electron')
+  return require(path.join(path.dirname(electron), 'package.json')).version
 }
 
-const SNAPSHOT_BACKUP_OLD = 'v8_context_snapshot.orig.bin'
-const SNAPSHOT_BIN_OLD = 'v8_context_snapshot.bin'
-const SNAPSHOT_BACKUP = 'v8_context_snapshot.x86_64.orig.bin'
-const SNAPSHOT_BIN = 'v8_context_snapshot.x86_64.bin'
-
-export function electronSnapshotFilenames(root: string) {
-  const electron = resolve(root, 'node_modules', 'electron')
-  const { version } = require(join(electron, 'package.json'))
-
-  return parseInt(version.split('.')[0]) >= 11
-    ? {
-        snapshotBin: SNAPSHOT_BIN,
-        snapshotBackup: SNAPSHOT_BACKUP,
-      }
-    : {
-        snapshotBin: SNAPSHOT_BIN_OLD,
-        snapshotBackup: SNAPSHOT_BACKUP_OLD,
-      }
+export function backupName(orig: string) {
+  const file = path.basename(orig)
+  const ext = path.extname(orig)
+  return `${file}.orig.${ext}`
 }
 
-export function electronSnapshotPath(root: string) {
-  const { snapshotBin } = electronSnapshotFilenames(root)
-  const electron = resolve(root, 'node_modules', 'electron')
+export function electronSnapshotPath(root: string, v8ContextFile: string) {
+  const electron = path.dirname(resolveFrom(root, 'electron'))
   let location
   switch (process.platform) {
     case 'darwin': {
@@ -174,8 +154,8 @@ export function electronSnapshotPath(root: string) {
     }
   }
 
-  const snapshotLocation = join(electron, location)
-  return join(snapshotLocation, snapshotBin)
+  const snapshotLocation = path.join(electron, location)
+  return path.join(snapshotLocation, v8ContextFile)
 }
 // at Object.__commonJS../node_modules/mute-stream/mute.js (/Volumes/d/dev/cy/perf-tr1/v8-snapshot/example-multi/cache/snapshot.js:10555:43)
 const commonJsModuleRx = /(at Object.__commonJS\.)([^(]+)([^ :]+) *:(\d+)(.+)/
