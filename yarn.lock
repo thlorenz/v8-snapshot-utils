@@ -46,9 +46,10 @@
   dependencies:
     defer-to-connect "^1.0.1"
 
-"@thlorenz/electron-mksnapshot@thlorenz/mksnapshot":
-  version "0.0.0"
-  resolved "https://codeload.github.com/thlorenz/mksnapshot/tar.gz/f810b8d5bca85b852f68af44af213264fa6075f3"
+"@thlorenz/electron-mksnapshot@^0.1.0":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@thlorenz/electron-mksnapshot/-/electron-mksnapshot-0.1.0.tgz#5c6fb24af1175d7ebdf573d7e2da268ba390da37"
+  integrity sha512-TPavOZ0QMTMEHxioPmVErubFmqZ4h/EuZnpAkLnbcbZcVmupEZibTzYLdlEd7ie/ib7hJAAC7pTJRhGdJQpuww==
   dependencies:
     "@electron/get" "^1.12.4"
     debug "^4.3.1"

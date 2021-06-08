@@ -28,7 +28,7 @@
   "license": "MIT",
   "private": false,
   "dependencies": {
-    "@thlorenz/electron-mksnapshot": "thlorenz/mksnapshot",
+    "@thlorenz/electron-mksnapshot": "^0.1.0",
     "ansi-colors": "^4.1.1",
     "debug": "^4.1.1",
     "packherd": "^0.3.1",
