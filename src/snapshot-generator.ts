@@ -326,9 +326,9 @@ export class SnapshotGenerator {
             `This could be due to the mksnapshot command silently failing.`
         )
         runInstructions()
-        return false
+        return null
       }
-      return true
+      return { v8ContextFile: this.v8ContextFile! }
     } catch (err) {
       if (err.stderr != null) {
         logError(err.stderr.toString())
@@ -385,8 +385,10 @@ export class SnapshotGenerator {
   }
 
   async makeAndInstallSnapshot() {
-    if (await this.makeSnapshot()) {
+    const res = await this.makeSnapshot()
+    if (res != null) {
       this.installSnapshot()
+      return res
     } else {
       throw new Error('make snapshot failed')
     }
