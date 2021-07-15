@@ -8,7 +8,7 @@
     "build": "tsc -p ./tsconfig.json && (rm -rf ./dist/blueprint && cp -R ./src/blueprint ./dist/blueprint)",
     "prepublish": "rm -rf ./dist/tests",
     "pretest": "make pretest",
-    "test": "tape dist/tests/**/*.js",
+    "test": "tape dist/tests/**/*.test.js",
     "debug-test": "node --inspect-brk -r ./tests/utils/hook-require.js tests/**/*.ts",
     "lint": "prettier -c ./src/",
     "lint:fix": "prettier --write ./src",
