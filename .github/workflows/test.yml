@@ -16,14 +16,23 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v1
       with:
         node-version: 14.x 
-    - name: yarn install, build, lint and test
+
+    - name: yarn install
       run: |
         yarn install
+
+    - name: yarn lint
+      if: matrix.os == 'macos-latest'
+      run: |
         yarn run lint
+
+    - name: yarn build and test
+      run: |
         yarn run test
       env:
         CI: true
