@@ -7,6 +7,9 @@ jobs:
 
     runs-on: ${{ matrix.os }} 
 
+    env:
+      DEBUG: '(mksnap|packherd|snapgen)*'
+
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
