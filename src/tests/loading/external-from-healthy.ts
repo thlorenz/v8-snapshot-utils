@@ -17,7 +17,7 @@ test('negotiator: healthy module requires an external one', async (t) => {
     nodeModulesOnly: false,
   })
   await generator.createScript()
-  generator.makeAndInstallSnapshot()
+  await generator.makeAndInstallSnapshot()
 
   const env: Record<string, any> = {
     ELECTRON_RUN_AS_NODE: 1,

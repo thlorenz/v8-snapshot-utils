@@ -18,7 +18,7 @@ test('esbuild: rewriting mutli assignments and multi exports', async (t) => {
     nodeModulesOnly: false,
   })
   await generator.createScript()
-  generator.makeAndInstallSnapshot()
+  await generator.makeAndInstallSnapshot()
 
   const env: Record<string, any> = {
     ELECTRON_RUN_AS_NODE: 1,
