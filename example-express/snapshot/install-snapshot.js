@@ -21,7 +21,7 @@ const cacheDir = path.resolve(__dirname, '../cache')
       }
     )
     await snapshotGenerator.createScript()
-    snapshotGenerator.makeSnapshot()
+    await snapshotGenerator.makeSnapshot()
     snapshotGenerator.installSnapshot()
   } catch (err) {
     prettyPrintError(err, projectBaseDir)
