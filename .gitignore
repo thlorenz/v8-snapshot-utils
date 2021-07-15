@@ -3,3 +3,4 @@ dist/
 cache/
 *.bin
 yarn.lock
+node_modules/
