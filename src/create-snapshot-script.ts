@@ -2,7 +2,7 @@ import debug from 'debug'
 import { strict as assert } from 'assert'
 import { promises as fs } from 'fs'
 import path from 'path'
-import { execSync } from 'child_process'
+import { execSync, ExecSyncOptions, StdioOptions } from 'child_process'
 import { BlueprintConfig, scriptFromBlueprint } from './blueprint'
 import { Metadata } from './types'
 import {
@@ -203,12 +203,19 @@ const makePackherdCreateBundle: (opts: CreateBundleOpts) => CreateBundle =
     logTrace('Running "%s"', cmd)
 
     const _MB = 1024 * 1024
-    try {
-      const stdout = execSync(cmd, {
+    const execOpts: ExecSyncOptions = Object.assign(
+      {
         maxBuffer: 200 * _MB,
         cwd: basedir,
-        stdio: ['pipe', 'pipe', 'ignore'],
-      })
+      },
+      // Windows doesn't properly support piping stdio
+      process.platform === 'win32'
+        ? {}
+        : { stdio: ['pipe', 'pipe', 'ignore'] as StdioOptions }
+    )
+
+    try {
+      const stdout = execSync(cmd, execOpts)
       const { warnings, outfiles, metafile } = JSON.parse(stdout.toString())
 
       assert(outfiles.length >= 1, 'need at least one outfile')
